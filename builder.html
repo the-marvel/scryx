@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Scry X</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.2.1/axios.min.js"></script>
+<script>
+function getImages() {
+	let ids = [];
+  	// open decklist
+    const listText = document.getElementById("list").value.trim()
+    const listArray = listText.split("\n");
+
+    if(listText === "" || listArray.length === 0) {
+        alert("Decklist is empty")
+        return
+    }
+
+    listArray.forEach(line => {
+        let words = line.trim().split(' ');
+
+        //remove foil tag
+        if (words[words.length - 1] === "*F*") {
+            words.pop();
+        }
+
+        let collectorNumber = words.pop();
+        let setCode = words.pop();
+        setCode = setCode.slice(1, -1);
+
+        //add identifier object to list
+        let d = { set: setCode, collector_number: collectorNumber };
+        ids.push(d);
+    });
+
+    let payload = { identifiers: [] };
+
+    let i = 0;
+    const step = 75;
+    const max = ids.length - 1;
+    let results = [];
+
+    (async () => {
+        while (i <= max) {
+            if (i < max) {
+                payload.identifiers = ids.slice(i, i + step - 1);
+            } else {
+                payload.identifiers = ids.slice(i, max + 1);
+            }
+
+            try {
+                const response = await axios.post('https://api.scryfall.com/cards/collection', payload);
+                console.log(response.status);
+                results.push(response.data);
+            } catch (error) {
+                console.error(error);
+            }
+
+            i += step;
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
+
+        let cards = [];
+        results.forEach(r => {
+            r.data.forEach(o => {
+                let card = { name: o.name, id: o.id, scryfall_uri: o.scryfall_uri, imgs: [] };
+
+                if (o.image_uris) {
+                    card.imgs.push(o.image_uris.large);
+                } else {
+                    o.card_faces.forEach(f => {
+                        card.imgs.push(f.image_uris.large);
+                    });
+                }
+
+                cards.push(card);
+            });
+        });
+
+        let htmlContent = '';
+        cards.forEach(o => {
+            let message = '';
+
+            o.imgs.forEach(img => {
+                message += `\n<a href=${o.scryfall_uri} target="_blank" ><img src="${img}"/></a>`;
+            });
+
+			//rel="noopener noreferrer"
+
+            message += "</p>";
+            htmlContent += message;
+        });
+
+        var wnd = window.open("about:blank", "_blank");
+        wnd.document.write(htmlContent);
+        }
+
+	)()};
+</script>
+</head>
+<body>
+
+<h3 for="list">Enter card list:</h3><p>
+<div><ul>
+        <li><i>e.g. CardCount* CardName* (SET) Number</i></li>
+        <li>Card count and card name are not required, but are usually included from an Archidekt list</li>
+        <li>For Archidekt export:
+            <ul>
+                <li>Export Type: Text</li>
+                <li>Export options:</li>
+                <ul>
+                    <li>Include Set Code</li>
+                    <li>Include Collector Number</li>
+                    <li>Uncheck everything else</li>
+                </ul>
+
+            </ul>
+        <li>Images are also links to the scryfall page for the card</li>
+    </ul>
+</div><p>
+<textarea id="list" name="list" rows="4" cols="100" placeholder="1 Nature's Will (CHK) 230&#10;1 Rude Awakening (GVL) 22&#10;...">
+</textarea>
+<p>
+<button onclick="getImages()">Get Images</button>
+
+</body>
+</html>
